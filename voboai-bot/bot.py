@@ -126,8 +126,16 @@ if __name__ == "__main__":
     if not config.DISCORD_TOKEN:
         raise SystemExit("DISCORD_TOKEN not set. Add it to Render env vars.")
 
-    # Start the health server so Render sees an open port.
-    # Remove this block if you switched to a Background Worker.
-    port = int(os.environ.get("PORT", 8000))
-    HTTPServer(("0.0.0.0", port), HealthHandler).serve_forever()
+    import threading
+
+    def run_health():
+        port = int(os.environ.get("PORT", 8000))
+        HTTPServer(("0.0.0.0", port), HealthHandler).serve_forever()
+
+    # Health server in a background thread — keeps Render's port check happy
+    # WITHOUT blocking the bot from starting.
+    threading.Thread(target=run_health, daemon=True).start()
+
+    # Main thread runs the bot — this is what brings it online.
     bot.run(config.DISCORD_TOKEN)
+
