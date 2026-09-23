@@ -15,6 +15,7 @@ Flow:
 Run:  python bot.py
 """
 import os
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import discord
@@ -27,7 +28,7 @@ import embeds
 
 # ------------------------------------------------------------------
 # Health check server — lets Render's port check pass.
-# (Not needed if you use a Background Worker instead of Web Service.)
+# Runs in a background thread so it NEVER blocks the bot.
 # ------------------------------------------------------------------
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -37,6 +38,11 @@ class HealthHandler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
+
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 8000))
+    HTTPServer(("0.0.0.0", port), HealthHandler).serve_forever()
 
 
 # ------------------------------------------------------------------
@@ -115,6 +121,8 @@ bot = VoboAiBot()
 async def on_ready():
     print(f"{config.BOT_NAME} is online as {bot.user} ({bot.user.id})")
     print(f"Version {config.BOT_VERSION} — {config.BOT_TAGLINE}")
+    # Force the bot to appear online by setting presence.
+    await bot.change_presence(status=discord.Status.online)
 
 
 @bot.tree.command(name="menu", description="Open the VoboAi menu")
@@ -126,16 +134,9 @@ if __name__ == "__main__":
     if not config.DISCORD_TOKEN:
         raise SystemExit("DISCORD_TOKEN not set. Add it to Render env vars.")
 
-    import threading
-
-    def run_health():
-        port = int(os.environ.get("PORT", 8000))
-        HTTPServer(("0.0.0.0", port), HealthHandler).serve_forever()
-
     # Health server in a background thread — keeps Render's port check happy
     # WITHOUT blocking the bot from starting.
-    threading.Thread(target=run_health, daemon=True).start()
+    threading.Thread(target=run_health_server, daemon=True).start()
 
     # Main thread runs the bot — this is what brings it online.
     bot.run(config.DISCORD_TOKEN)
-
