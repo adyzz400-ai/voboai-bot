@@ -1,11 +1,11 @@
 """
 VoboAi — main Discord bot.
 
-One slash command:  /menu
-Each screen is its OWN embed with ONLY the relevant navigation buttons.
-
-Login uses a Discord Modal (popup form) that feeds the real Sparx
-automation running in a background thread.
+Flow:
+  /menu → Login embed (Sparx Science branding)
+           [🔐 Login] → Login prompt embed → [🔐 Login] → Discord Modal
+             School / Username / Password / Login Type
+           On submit → bot DMs you live progress embeds (paginated, red bars)
 
 Run:  python bot.py
 """
@@ -20,17 +20,10 @@ from discord.ext import commands
 import config
 import embeds
 
-# --- Automation (Playwright) ---
-try:
-    from voboai import sparx_login
-    HAS_AUTOMATION = True
-except Exception:
-    HAS_AUTOMATION = False
-
 
 # ------------------------------------------------------------------
-# Health check server — lets Render's port check pass.
-# Runs in a background thread so it NEVER blocks the bot.
+# Health check server — keeps Render's port check happy.
+# Runs in a background thread so it never blocks the bot.
 # ------------------------------------------------------------------
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -48,108 +41,119 @@ def run_health_server():
 
 
 # ------------------------------------------------------------------
-# Login Modal — popup form with text boxes
+# Login Modal — School / Username / Password / Login Type
 # ------------------------------------------------------------------
 class LoginModal(discord.ui.Modal, title="VoboAi Login"):
+    school = discord.ui.TextInput(
+        label="School",
+        placeholder="e.g. St Mary's High School",
+        required=True,
+        max_length=100,
+    )
     username = discord.ui.TextInput(
-        label="Sparx Username",
+        label="Username",
         placeholder="e.g. 123456",
         required=True,
         max_length=50,
     )
     password = discord.ui.TextInput(
-        label="Sparx Password",
+        label="Password",
         placeholder="Your Sparx password",
         required=True,
         max_length=100,
     )
-    school = discord.ui.TextInput(
-        label="School Name",
-        placeholder="e.g. St Mary's High School",
-        required=True,
-        max_length=100,
+    login_type = discord.ui.TextInput(
+        label="Login Type",
+        placeholder="Normal / Microsoft / Google",
+        required=False,
+        max_length=20,
     )
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+
+        # Acknowledge + start the automation
         await interaction.followup.send(
-            f"🔐 Logging you into **{self.school.value}**...",
+            f"✅ Credentials received!\n"
+            f"**School:** {self.school.value}\n"
+            f"**Username:** {self.username.value}\n"
+            f"**Login Type:** {self.login_type.value or 'Normal'}\n\n"
+            f"🤖 Starting automation — I'll DM you live progress.",
             ephemeral=True,
         )
 
-        # Run the real Sparx login in a background thread.
-        if HAS_AUTOMATION:
-            def worker():
-                try:
-                    result = sparx_login.login(
-                        self.username.value,
-                        self.password.value,
-                        self.school.value,
-                        headless=True,
-                    )
-                    if result["success"]:
-                        # TODO: fetch homework, then AI solve
-                        msg = f"✅ Logged in! Final URL: {result['url']}"
-                    else:
-                        msg = f"❌ Login failed: {result.get('error', 'unknown')}"
-                except Exception as e:
-                    msg = f"❌ Error: {e}"
+        # Start the background automation thread
+        threading.Thread(
+            target=self._run_automation,
+            args=(interaction,),
+            daemon=True,
+        ).start()
 
-                # Post result back to Discord from the worker thread.
-                import asyncio
-                asyncio.run_coroutine_threadsafe(
-                    interaction.followup.send(msg, ephemeral=True),
-                    bot.loop,
+    def _run_automation(self, interaction: discord.Interaction):
+        """Runs in a background thread. Sends progress DMs to the user."""
+        import asyncio
+
+        try:
+            # --- Simulated progress: send paginated progress embeds ---
+            for page, page_tasks in enumerate(
+                [
+                    [("Task 1", 100), ("Task 2", 100), ("Task 3", 100)],
+                    [("Task 4", 100), ("Task 5", 100), ("Task 6", 100)],
+                ],
+                start=1,
+            ):
+                embed = embeds.progress_embed(
+                    page=page,
+                    total_pages=2,
+                    tasks=page_tasks,
                 )
+                asyncio.run_coroutine_threadsafe(
+                    interaction.user.send(embed=embed),
+                    bot.loop,
+                ).result()
+                time.sleep(2)
 
-            threading.Thread(target=worker, daemon=True).start()
-        else:
-            await interaction.followup.send(
-                "⚠️ Automation module not installed. Install Playwright + "
-                "`pip install playwright && playwright install chromium`.",
-                ephemeral=True,
-            )
+            # Final success
+            asyncio.run_coroutine_threadsafe(
+                interaction.user.send(embed=embeds.success_embed()),
+                bot.loop,
+            ).result()
+        except Exception as e:
+            asyncio.run_coroutine_threadsafe(
+                interaction.user.send(f"❌ Automation error: {e}"),
+                bot.loop,
+            ).result()
 
 
 # ------------------------------------------------------------------
-# Views — each screen has its own button set.
+# Views
 # ------------------------------------------------------------------
 class HomeView(discord.ui.View):
-    """Buttons on the Menu embed."""
+    """Buttons on the main login embed."""
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="🔐 Login", style=discord.ButtonStyle.red, row=0)
     async def go_login(self, interaction, button):
-        await interaction.response.send_modal(LoginModal())
+        await interaction.response.edit_message(
+            embed=embeds.login_prompt_embed(), view=LoginPromptView()
+        )
 
-    @discord.ui.button(label="📚 Queue", style=discord.ButtonStyle.gray, row=0)
+    @discord.ui.button(label="📚 Check Queue", style=discord.ButtonStyle.gray, row=0)
     async def go_queue(self, interaction, button):
-        await interaction.response.edit_message(embed=embeds.queue_embed(), view=QueueView())
-
-    @discord.ui.button(label="✅ Success", style=discord.ButtonStyle.green, row=0)
-    async def go_success(self, interaction, button):
-        await interaction.response.edit_message(embed=embeds.success_embed(), view=SuccessView())
+        await interaction.response.send_message(
+            embed=embeds.progress_embed(), ephemeral=True
+        )
 
 
-class QueueView(discord.ui.View):
-    """Buttons on the Queue embed."""
+class LoginPromptView(discord.ui.View):
+    """Buttons on the 'Login by entering your account details' embed."""
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="🏠 Home", style=discord.ButtonStyle.blurple, row=0)
-    async def go_home(self, interaction, button):
-        await interaction.response.edit_message(embed=embeds.menu_embed(), view=HomeView())
-
-
-class SuccessView(discord.ui.View):
-    """Buttons on the Success embed."""
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="🏠 Home", style=discord.ButtonStyle.blurple, row=0)
-    async def go_home(self, interaction, button):
-        await interaction.response.edit_message(embed=embeds.menu_embed(), view=HomeView())
+    @discord.ui.button(label="🔐 Login", style=discord.ButtonStyle.red, row=0)
+    async def open_modal(self, interaction, button):
+        await interaction.response.send_modal(LoginModal())
 
 
 # ------------------------------------------------------------------
@@ -178,16 +182,14 @@ async def on_ready():
 
 @bot.tree.command(name="menu", description="Open the VoboAi menu")
 async def menu(interaction: discord.Interaction):
-    await interaction.response.send_message(embed=embeds.menu_embed(), view=HomeView())
+    await interaction.response.send_message(
+        embed=embeds.login_embed(config.ACTIVE_SUBJECT), view=HomeView()
+    )
 
 
 if __name__ == "__main__":
     if not config.DISCORD_TOKEN:
         raise SystemExit("DISCORD_TOKEN not set. Add it to Render env vars.")
 
-    # Health server in a background thread — keeps Render's port check happy
-    # WITHOUT blocking the bot from starting.
     threading.Thread(target=run_health_server, daemon=True).start()
-
-    # Main thread runs the bot — this is what brings it online.
     bot.run(config.DISCORD_TOKEN)
