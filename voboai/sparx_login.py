@@ -1,52 +1,70 @@
 """
 VoboAi — Sparx Maths login automation.
 
-Two-step login:
-  1. School selection  -> done locally from the bundled school list
-  2. Auth page         -> fill username/password, click "Log in"
+Real flow (from user's actual page elements):
+  1. School select page:
+       https://selectschool.sparx-learning.com/?app=sparx_maths&forget=1
+       - Type school name into the search box
+       - Click the matching result
+       - Click "Continue"
+     This redirects to the auth page.
+  2. Auth page:
+       https://auth.sparx-learning.com/oauth2/auth?client_id=sparx-learning&hd=<school-uuid>&...
+       - Fill #username
+       - Fill #password
+       - Click "Log in"
 """
 import time
 
 from playwright.sync_api import sync_playwright
 
-from .school_lookup import find_school
-
-
-def _school_to_auth_url(school: dict) -> str:
-    slug = school["u"]
-    return f"https://{slug}.sparx-learning.com/oauth2/auth"
+SELECT_URL = "https://selectschool.sparx-learning.com/?app=sparx_maths&forget=1"
 
 
 def login(username: str, password: str, school_name: str, headless: bool = True):
-    school = find_school(school_name)
-    if school is None:
-        return {"success": False, "error": f"School not found: {school_name!r}"}
-
-    print(f"[login] School matched: {school['n']} (slug={school['u']})")
-
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         context = browser.new_context()
         page = context.new_page()
 
-        auth_url = _school_to_auth_url(school)
-        print(f"[login] Opening auth page: {auth_url}")
-        page.goto(auth_url, wait_until="networkidle")
+        # ---- Step 1: School select ----
+        print(f"[login] Opening school select: {SELECT_URL}")
+        page.goto(SELECT_URL, wait_until="networkidle")
 
+        # Type school name into the search box
+        search = page.locator("input[type='search'], input[type='text'], [role='searchbox']").first
+        search.fill(school_name)
+        print(f"[login] Typed school: {school_name}")
+        time.sleep(2)
+
+        # Click the matching school result (a list item / button with the name)
+        try:
+            page.locator(f"text={school_name}").first.click()
+            print("[login] Clicked school result")
+        except Exception:
+            page.locator("li, [role='option'], button").filter(has_text=school_name).first.click()
+            print("[login] Clicked school result (fallback)")
+
+        # Click Continue
+        page.get_by_role("button", name="Continue").click()
+        print("[login] Clicked Continue")
+
+        # Wait for redirect to auth page
+        page.wait_for_url("**/oauth2/auth**", timeout=30000)
+        print(f"[login] Redirected to: {page.url}")
+
+        # ---- Step 2: Fill login form ----
         page.fill("#username", username)
         print("[login] Filled username")
 
         page.fill("#password", password)
         print("[login] Filled password")
 
-        try:
-            page.get_by_role("button", name="Log in").click()
-        except Exception:
-            page.locator("button[type='submit']").click()
+        page.get_by_role("button", name="Log in").click()
         print("[login] Clicked Log in")
 
         page.wait_for_load_state("networkidle")
-        time.sleep(2)
+        time.sleep(3)
 
         final_url = page.url
         print(f"[login] Final URL: {final_url}")
@@ -58,7 +76,6 @@ def login(username: str, password: str, school_name: str, headless: bool = True)
             "page": page,
             "browser": browser,
             "context": context,
-            "school": school,
             "url": final_url,
         }
 
@@ -74,4 +91,4 @@ if __name__ == "__main__":
     if result["success"]:
         print(f"LOGIN OK -> {result['url']}")
     else:
-        print(f"LOGIN FAILED -> {result.get('error', result.get('url'))}")
+        print(f"LOGIN FAILED -> {result.get('url')}")
