@@ -62,24 +62,66 @@ def login(
 
         step = "Waiting for school search box"
 
-        search = page.locator("input").first
+        # Sparx may use different elements for the school selector.
+        search_candidates = [
+            "input",
+            "textarea",
+            "[role='textbox']",
+            "[contenteditable='true']",
+            "input[type='search']",
+            "input[type='text']",
+            "[aria-label*='school' i]",
+            "[placeholder*='school' i]",
+            "[aria-label*='search' i]",
+            "[placeholder*='search' i]",
+        ]
 
-        search.wait_for(
-            state="visible",
-            timeout=30000,
-        )
+        search = None
+
+        for selector in search_candidates:
+            locator = page.locator(selector)
+
+            try:
+                count = locator.count()
+
+                for i in range(count):
+                    candidate = locator.nth(i)
+
+                    if candidate.is_visible():
+                        search = candidate
+                        print(
+                            f"[login] Found school search using: {selector}"
+                        )
+                        break
+
+                if search is not None:
+                    break
+
+            except Exception:
+                continue
+
+        if search is None:
+            raise RuntimeError(
+                "Could not find the Sparx school search element."
+            )
+
+        # ---------------------------------------------------------
+        # STEP 3 — Enter school name
+        # ---------------------------------------------------------
 
         step = "Entering school name"
 
         search.click()
         search.fill(school_name)
 
-        print(f"[login] Typed school: {school_name}")
+        print(
+            f"[login] Typed school: {school_name}"
+        )
 
         time.sleep(2)
 
         # ---------------------------------------------------------
-        # STEP 3 — Select school
+        # STEP 4 — Select school
         # ---------------------------------------------------------
 
         step = "Selecting school"
@@ -90,11 +132,15 @@ def login(
                 exact=True,
             ).first.click()
 
-            print("[login] Clicked school result")
+            print(
+                "[login] Clicked school result"
+            )
 
         except Exception:
             page.locator(
-                "li, [role='option'], button"
+                "li, "
+                "[role='option'], "
+                "button"
             ).filter(
                 has_text=school_name
             ).first.click()
@@ -104,7 +150,7 @@ def login(
             )
 
         # ---------------------------------------------------------
-        # STEP 4 — Continue
+        # STEP 5 — Continue
         # ---------------------------------------------------------
 
         step = "Clicking Continue"
@@ -114,7 +160,9 @@ def login(
             name="Continue",
         ).click()
 
-        print("[login] Clicked Continue")
+        print(
+            "[login] Clicked Continue"
+        )
 
         step = "Waiting for Sparx login page"
 
@@ -126,15 +174,19 @@ def login(
         except Exception:
             time.sleep(3)
 
-        print(f"[login] Current URL: {page.url}")
+        print(
+            f"[login] Current URL: {page.url}"
+        )
 
         # ---------------------------------------------------------
-        # STEP 5 — Username
+        # STEP 6 — Username
         # ---------------------------------------------------------
 
         step = "Waiting for username field"
 
-        username_field = page.locator("#username")
+        username_field = page.locator(
+            "#username"
+        )
 
         username_field.wait_for(
             state="visible",
@@ -145,15 +197,19 @@ def login(
 
         username_field.fill(username)
 
-        print("[login] Filled username")
+        print(
+            "[login] Filled username from Discord modal"
+        )
 
         # ---------------------------------------------------------
-        # STEP 6 — Password
+        # STEP 7 — Password
         # ---------------------------------------------------------
 
         step = "Waiting for password field"
 
-        password_field = page.locator("#password")
+        password_field = page.locator(
+            "#password"
+        )
 
         password_field.wait_for(
             state="visible",
@@ -164,10 +220,12 @@ def login(
 
         password_field.fill(password)
 
-        print("[login] Filled password")
+        print(
+            "[login] Filled password from Discord modal"
+        )
 
         # ---------------------------------------------------------
-        # STEP 7 — Log in
+        # STEP 8 — Log in
         # ---------------------------------------------------------
 
         step = "Clicking Log in"
@@ -177,7 +235,9 @@ def login(
             name="Log in",
         ).click()
 
-        print("[login] Clicked Log in")
+        print(
+            "[login] Clicked Log in"
+        )
 
         step = "Waiting for login to complete"
 
@@ -198,7 +258,7 @@ def login(
         )
 
         # ---------------------------------------------------------
-        # STEP 8 — Verify session
+        # STEP 9 — Verify session
         # ---------------------------------------------------------
 
         step = "Verifying Sparx session"
@@ -244,7 +304,9 @@ def login(
                 "error": "Login could not be verified.",
             }
 
-        print("[login] Login successful.")
+        print(
+            "[login] Login successful."
+        )
 
         return {
             "success": True,
@@ -259,7 +321,8 @@ def login(
 
         error_message = (
             f"Step: {step}\n"
-            f"URL: {page.url if browser and 'page' in locals() else 'Unavailable'}\n"
+            f"URL: "
+            f"{page.url if browser and 'page' in locals() else 'Unavailable'}\n"
             f"Error: {str(e)}"
         )
 
@@ -278,7 +341,9 @@ def login(
         except Exception:
             pass
 
-        raise RuntimeError(error_message) from e
+        raise RuntimeError(
+            error_message
+        ) from e
 
 
 def close_login(result):
