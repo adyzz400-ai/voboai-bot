@@ -1,21 +1,10 @@
 """
 VoboAi — Sparx Maths login automation.
-
-Flow:
-  1. Open Sparx school selection.
-  2. Search/select school.
-  3. Continue to Sparx authentication.
-  4. Fill username/password.
-  5. Log in.
-  6. Verify the Sparx session.
-  7. Keep the Playwright browser/page alive so homework.py
-     can continue using the authenticated page.
 """
 
 import os
 import time
 
-# Use Playwright's local browser installation.
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
 from playwright.sync_api import sync_playwright
@@ -33,17 +22,13 @@ def login(
     school_name: str,
     headless: bool = True,
 ):
-    """
-    Log into Sparx and return a live authenticated browser/page.
-
-    IMPORTANT:
-    The Playwright manager is intentionally kept alive after this
-    function returns because homework.py needs to use the page.
-    """
-
     playwright = sync_playwright().start()
+    browser = None
+    step = "Starting Playwright"
 
     try:
+        step = "Launching Chromium"
+
         browser = playwright.chromium.launch(
             headless=headless,
             args=[
@@ -56,8 +41,10 @@ def login(
         page = context.new_page()
 
         # ---------------------------------------------------------
-        # STEP 1 — School selection
+        # STEP 1 — Open school selection
         # ---------------------------------------------------------
+
+        step = "Opening Sparx school selection page"
 
         print(f"[login] Opening school select: {SELECT_URL}")
 
@@ -68,6 +55,12 @@ def login(
         )
 
         print(f"[login] Page loaded: {page.url}")
+
+        # ---------------------------------------------------------
+        # STEP 2 — Find school search
+        # ---------------------------------------------------------
+
+        step = "Waiting for school search box"
 
         search = page.locator(
             "input[type='search'], "
@@ -80,11 +73,19 @@ def login(
             timeout=30000,
         )
 
+        step = "Entering school name"
+
         search.fill(school_name)
 
         print(f"[login] Typed school: {school_name}")
 
         time.sleep(2)
+
+        # ---------------------------------------------------------
+        # STEP 3 — Select school
+        # ---------------------------------------------------------
+
+        step = "Selecting school"
 
         try:
             page.get_by_text(
@@ -106,8 +107,10 @@ def login(
             )
 
         # ---------------------------------------------------------
-        # STEP 2 — Continue
+        # STEP 4 — Continue
         # ---------------------------------------------------------
+
+        step = "Clicking Continue"
 
         page.get_by_role(
             "button",
@@ -115,6 +118,8 @@ def login(
         ).click()
 
         print("[login] Clicked Continue")
+
+        step = "Waiting for Sparx login page"
 
         try:
             page.wait_for_url(
@@ -127,34 +132,48 @@ def login(
         print(f"[login] Current URL: {page.url}")
 
         # ---------------------------------------------------------
-        # STEP 3 — Username/password
+        # STEP 5 — Username
         # ---------------------------------------------------------
 
-        username_field = page.locator("#username")
+        step = "Waiting for username field"
 
-        password_field = page.locator("#password")
+        username_field = page.locator("#username")
 
         username_field.wait_for(
             state="visible",
             timeout=30000,
         )
 
+        step = "Entering username"
+
+        username_field.fill(username)
+
+        print("[login] Filled username")
+
+        # ---------------------------------------------------------
+        # STEP 6 — Password
+        # ---------------------------------------------------------
+
+        step = "Waiting for password field"
+
+        password_field = page.locator("#password")
+
         password_field.wait_for(
             state="visible",
             timeout=30000,
         )
 
-        username_field.fill(username)
-
-        print("[login] Filled username")
+        step = "Entering password"
 
         password_field.fill(password)
 
         print("[login] Filled password")
 
         # ---------------------------------------------------------
-        # STEP 4 — Login
+        # STEP 7 — Log in
         # ---------------------------------------------------------
+
+        step = "Clicking Log in"
 
         page.get_by_role(
             "button",
@@ -162,6 +181,8 @@ def login(
         ).click()
 
         print("[login] Clicked Log in")
+
+        step = "Waiting for login to complete"
 
         try:
             page.wait_for_load_state(
@@ -180,8 +201,10 @@ def login(
         )
 
         # ---------------------------------------------------------
-        # STEP 5 — Verify session
+        # STEP 8 — Verify session
         # ---------------------------------------------------------
+
+        step = "Verifying Sparx session"
 
         cookies = context.cookies()
 
@@ -211,10 +234,6 @@ def login(
         )
 
         if not success:
-            print(
-                "[login] Login could not be verified."
-            )
-
             browser.close()
             playwright.stop()
 
@@ -225,11 +244,10 @@ def login(
                 "context": None,
                 "playwright": None,
                 "url": final_url,
+                "error": "Login could not be verified.",
             }
 
-        print(
-            "[login] Login successful."
-        )
+        print("[login] Login successful.")
 
         return {
             "success": True,
@@ -240,9 +258,21 @@ def login(
             "url": final_url,
         }
 
-    except Exception:
+    except Exception as e:
+
+        error_message = (
+            f"Step: {step}\n"
+            f"URL: {page.url if browser and 'page' in locals() else 'Unavailable'}\n"
+            f"Error: {str(e)}"
+        )
+
+        print(
+            f"[login] ERROR\n{error_message}"
+        )
+
         try:
-            browser.close()
+            if browser:
+                browser.close()
         except Exception:
             pass
 
@@ -251,14 +281,12 @@ def login(
         except Exception:
             pass
 
-        raise
+        raise RuntimeError(error_message) from e
 
 
 def close_login(result):
     """
     Close the browser returned by login().
-
-    Call this after homework automation has completely finished.
     """
 
     try:
