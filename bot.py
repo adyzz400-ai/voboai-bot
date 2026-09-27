@@ -22,6 +22,20 @@ from discord.ext import commands
 
 import config
 import embeds
+import os
+import subprocess
+import sys
+
+# Ensure Playwright browser is installed (idempotent, fast if already there)
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/render/.cache/ms-playwright")
+try:
+    subprocess.run(
+        [sys.executable, "-m", "playwright", "install", "chromium"],
+        check=True,
+        capture_output=True,
+    )
+except subprocess.CalledProcessError as e:
+    print("[startup] Playwright install failed:", e.stderr.decode())
 
 from voboai import sparx_login, homework as hw, automator
 
