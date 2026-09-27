@@ -12,7 +12,11 @@ Flow:
      can continue using the authenticated page.
 """
 
+import os
 import time
+
+# Use Playwright's local browser installation.
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
 from playwright.sync_api import sync_playwright
 
@@ -127,6 +131,7 @@ def login(
         # ---------------------------------------------------------
 
         username_field = page.locator("#username")
+
         password_field = page.locator("#password")
 
         username_field.wait_for(
