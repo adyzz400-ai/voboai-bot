@@ -11,9 +11,6 @@ Run: python bot.py
 
 import os
 
-# Render installs Chromium during the build command.
-# Force Playwright to use Render's browser directory.
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/render/.cache/ms-playwright"
 
 import time
 import threading
