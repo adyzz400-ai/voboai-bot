@@ -62,17 +62,19 @@ def login(
 
         step = "Waiting for school search box"
 
-search = page.get_by_role(
-    "textbox",
-    name="Start typing your school's name"
-)
+        search = page.get_by_role(
+            "textbox",
+            name="Start typing your school's name",
+        )
 
-search.wait_for(
-    state="visible",
-    timeout=30000,
-)
+        search.wait_for(
+            state="visible",
+            timeout=30000,
+        )
 
-print("[login] Found Sparx school search box")
+        print(
+            "[login] Found Sparx school search box"
+        )
 
         # ---------------------------------------------------------
         # STEP 3 — Enter school name
