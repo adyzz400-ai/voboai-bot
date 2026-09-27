@@ -12,14 +12,12 @@ Real flow:
 """
 
 import os
-import time
+import time 
 
-os.environ.setdefault(
-    "PLAYWRIGHT_BROWSERS_PATH",
-    "/opt/render/.cache/ms-playwright",
-)
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/render/.cache/ms-playwright"
 
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
+
 
 
 SELECT_URL = (
