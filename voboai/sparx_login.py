@@ -12,11 +12,7 @@ Flow:
      can continue using the authenticated page.
 """
 
-import os
 import time
-
-# Render Playwright browser location
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/render/.cache/ms-playwright"
 
 from playwright.sync_api import sync_playwright
 
@@ -86,7 +82,6 @@ def login(
 
         time.sleep(2)
 
-        # Try exact school text first.
         try:
             page.get_by_text(
                 school_name,
@@ -96,7 +91,6 @@ def login(
             print("[login] Clicked school result")
 
         except Exception:
-            # Fallback to common result elements.
             page.locator(
                 "li, [role='option'], button"
             ).filter(
@@ -118,14 +112,12 @@ def login(
 
         print("[login] Clicked Continue")
 
-        # Give Sparx time to redirect.
         try:
             page.wait_for_url(
                 "**/oauth2/auth**",
                 timeout=30000,
             )
         except Exception:
-            # Some Sparx flows may redirect differently.
             time.sleep(3)
 
         print(f"[login] Current URL: {page.url}")
@@ -134,13 +126,8 @@ def login(
         # STEP 3 — Username/password
         # ---------------------------------------------------------
 
-        username_field = page.locator(
-            "#username"
-        )
-
-        password_field = page.locator(
-            "#password"
-        )
+        username_field = page.locator("#username")
+        password_field = page.locator("#password")
 
         username_field.wait_for(
             state="visible",
@@ -208,7 +195,6 @@ def login(
             ", ".join(sorted(cookie_names)),
         )
 
-        # Normal successful login should leave auth.sparx-learning.com.
         left_auth = (
             "auth.sparx-learning.com"
             not in final_url
@@ -224,7 +210,6 @@ def login(
                 "[login] Login could not be verified."
             )
 
-            # Clean up because we're not returning the browser.
             browser.close()
             playwright.stop()
 
@@ -241,10 +226,6 @@ def login(
             "[login] Login successful."
         )
 
-        # IMPORTANT:
-        # Do NOT close browser/playwright here.
-        #
-        # homework.py still needs the live page.
         return {
             "success": True,
             "page": page,
@@ -255,8 +236,6 @@ def login(
         }
 
     except Exception:
-        # If anything fails before a successful return,
-        # clean up the browser and Playwright manager.
         try:
             browser.close()
         except Exception:
