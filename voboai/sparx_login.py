@@ -62,48 +62,17 @@ def login(
 
         step = "Waiting for school search box"
 
-        # Sparx may use different elements for the school selector.
-        search_candidates = [
-            "input",
-            "textarea",
-            "[role='textbox']",
-            "[contenteditable='true']",
-            "input[type='search']",
-            "input[type='text']",
-            "[aria-label*='school' i]",
-            "[placeholder*='school' i]",
-            "[aria-label*='search' i]",
-            "[placeholder*='search' i]",
-        ]
+search = page.get_by_role(
+    "textbox",
+    name="Start typing your school's name"
+)
 
-        search = None
+search.wait_for(
+    state="visible",
+    timeout=30000,
+)
 
-        for selector in search_candidates:
-            locator = page.locator(selector)
-
-            try:
-                count = locator.count()
-
-                for i in range(count):
-                    candidate = locator.nth(i)
-
-                    if candidate.is_visible():
-                        search = candidate
-                        print(
-                            f"[login] Found school search using: {selector}"
-                        )
-                        break
-
-                if search is not None:
-                    break
-
-            except Exception:
-                continue
-
-        if search is None:
-            raise RuntimeError(
-                "Could not find the Sparx school search element."
-            )
+print("[login] Found Sparx school search box")
 
         # ---------------------------------------------------------
         # STEP 3 — Enter school name
