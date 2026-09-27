@@ -96,7 +96,6 @@ async function login(username, password, school) {
     }
 
     await schoolInput.fill(school);
-
     await page.waitForTimeout(2000);
 
     let schoolResult = null;
@@ -221,9 +220,9 @@ async function login(username, password, school) {
 
     return {
       success: true,
-      storage_state:
-        await context.storageState()
+      storage_state: await context.storageState()
     };
+
   } finally {
     await browser.close();
   }
@@ -258,6 +257,7 @@ async function main() {
     );
 
     send(result);
+
   } catch (error) {
     send({
       success: false,
