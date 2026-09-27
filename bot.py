@@ -10,8 +10,6 @@ Run: python bot.py
 """
 
 import os
-
-
 import time
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -36,7 +34,10 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 def run_health_server():
     port = int(os.environ.get("PORT", 8000))
-    HTTPServer(("0.0.0.0", port), HealthHandler).serve_forever()
+    HTTPServer(
+        ("0.0.0.0", port),
+        HealthHandler,
+    ).serve_forever()
 
 
 BAR_FILES = {}
@@ -46,7 +47,10 @@ def load_bars():
     import pathlib
 
     for pct in [0, 25, 50, 75, 100]:
-        p = pathlib.Path(f"bars/bar_{pct}.png")
+        p = pathlib.Path(
+            f"bars/bar_{pct}.png"
+        )
+
         if p.exists():
             BAR_FILES[pct] = discord.File(
                 p,
@@ -54,7 +58,10 @@ def load_bars():
             )
 
 
-class LoginModal(discord.ui.Modal, title="VoboAi Login"):
+class LoginModal(
+    discord.ui.Modal,
+    title="VoboAi Login",
+):
     school = discord.ui.TextInput(
         label="School",
         placeholder="e.g. St Mary's High School",
@@ -83,14 +90,17 @@ class LoginModal(discord.ui.Modal, title="VoboAi Login"):
         max_length=20,
     )
 
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+    async def on_submit(
+        self,
+        interaction: discord.Interaction,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
 
         await interaction.followup.send(
-            f"✅ Credentials received!\n"
-            f"**School:** {self.school.value}\n"
-            f"**Username:** {self.username.value}\n\n"
-            f"🔐 Logging into Sparx and fetching your homework...",
+            "🔐 Logging into Sparx and fetching "
+            "your homework...",
             ephemeral=True,
         )
 
@@ -106,7 +116,10 @@ class LoginModal(discord.ui.Modal, title="VoboAi Login"):
             daemon=True,
         ).start()
 
-    def _fetch_and_show_homework(self, interaction):
+    def _fetch_and_show_homework(
+        self,
+        interaction,
+    ):
         import asyncio
 
         try:
@@ -126,6 +139,7 @@ class LoginModal(discord.ui.Modal, title="VoboAi Login"):
                     ),
                     bot.loop,
                 ).result()
+
                 return
 
             page = result["page"]
@@ -165,14 +179,23 @@ class LoginModal(discord.ui.Modal, title="VoboAi Login"):
             ).result()
 
 
-class HomeworkSelect(discord.ui.Select):
-    def __init__(self, tasks, creds):
+class HomeworkSelect(
+    discord.ui.Select
+):
+    def __init__(
+        self,
+        tasks,
+        creds,
+    ):
         options = []
 
         for i, task in enumerate(tasks[:25]):
             options.append(
                 discord.SelectOption(
-                    label=task["label"][:100] or f"Homework {i + 1}",
+                    label=(
+                        task["label"][:100]
+                        or f"Homework {i + 1}"
+                    ),
                     description=(
                         f"Due {task.get('due', '?')} • "
                         f"{task.get('questions', 0)} questions"
@@ -188,7 +211,10 @@ class HomeworkSelect(discord.ui.Select):
         self.tasks = tasks
         self._creds = creds
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(
+        self,
+        interaction: discord.Interaction,
+    ):
         choice = self.values[0]
 
         task = next(
@@ -200,12 +226,15 @@ class HomeworkSelect(discord.ui.Select):
             self.tasks[0],
         )
 
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(
+            ephemeral=True
+        )
 
         await interaction.followup.send(
             f"🚀 Starting **{choice}**...\n"
             f"I'll DM you live progress.\n"
-            f"⏱️ This will take ~30min-1hr (Sparx v2 timer).",
+            f"⏱️ This will take ~30min-1hr "
+            f"(Sparx v2 timer).",
             ephemeral=True,
         )
 
@@ -220,9 +249,17 @@ class HomeworkSelect(discord.ui.Select):
         ).start()
 
 
-class HomeworkSelectView(discord.ui.View):
-    def __init__(self, tasks, creds):
-        super().__init__(timeout=600)
+class HomeworkSelectView(
+    discord.ui.View
+):
+    def __init__(
+        self,
+        tasks,
+        creds,
+    ):
+        super().__init__(
+            timeout=600
+        )
 
         self.add_item(
             HomeworkSelect(
@@ -232,12 +269,21 @@ class HomeworkSelectView(discord.ui.View):
         )
 
 
-def run_real_automation(user, task, creds):
+def run_real_automation(
+    user,
+    task,
+    creds,
+):
     import asyncio
     import random
 
     start = time.time()
-    total = task.get("questions", 0) or 112
+
+    total = (
+        task.get("questions", 0)
+        or 112
+    )
+
     done = 0
 
     def progress_cb(info):
@@ -248,7 +294,9 @@ def run_real_automation(user, task, creds):
         if stage == "progress":
             done = info["done"]
 
-            pct = int(done / total * 100)
+            pct = int(
+                done / total * 100
+            )
 
             nearest = min(
                 [0, 25, 50, 75, 100],
@@ -257,7 +305,10 @@ def run_real_automation(user, task, creds):
 
             embed = embeds.progress_embed(
                 homework_name=task["label"],
-                status=f"Running ({done}/{total} questions)",
+                status=(
+                    f"Running "
+                    f"({done}/{total} questions)"
+                ),
                 page=1,
                 total_pages=1,
                 tasks=[
@@ -300,11 +351,16 @@ def run_real_automation(user, task, creds):
 
         elif stage == "done":
             embed = embeds.success_embed(
-                xp=random.randint(300, 600)
+                xp=random.randint(
+                    300,
+                    600,
+                )
             )
 
             asyncio.run_coroutine_threadsafe(
-                user.send(embed=embed),
+                user.send(
+                    embed=embed
+                ),
                 bot.loop,
             ).result()
 
@@ -343,9 +399,13 @@ def _fmt_time(seconds):
     return f"{m}m {s}s"
 
 
-class HomeView(discord.ui.View):
+class HomeView(
+    discord.ui.View
+):
     def __init__(self):
-        super().__init__(timeout=None)
+        super().__init__(
+            timeout=None
+        )
 
     @discord.ui.button(
         label="🔐 Login",
@@ -378,9 +438,13 @@ class HomeView(discord.ui.View):
         )
 
 
-class LoginPromptView(discord.ui.View):
+class LoginPromptView(
+    discord.ui.View
+):
     def __init__(self):
-        super().__init__(timeout=None)
+        super().__init__(
+            timeout=None
+        )
 
     @discord.ui.button(
         label="🔐 Login",
@@ -397,7 +461,9 @@ class LoginPromptView(discord.ui.View):
         )
 
 
-class VoboAiBot(commands.Bot):
+class VoboAiBot(
+    commands.Bot
+):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -409,7 +475,9 @@ class VoboAiBot(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-        print("Slash commands synced.")
+        print(
+            "Slash commands synced."
+        )
 
 
 bot = VoboAiBot()
@@ -459,4 +527,6 @@ if __name__ == "__main__":
         daemon=True,
     ).start()
 
-    bot.run(config.DISCORD_TOKEN)
+    bot.run(
+        config.DISCORD_TOKEN
+    )
