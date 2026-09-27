@@ -7,6 +7,10 @@ Flow:
   Submit → real Sparx login → scrape homework → DM "Select Homework" dropdown
   [pick task] → real automation runs (Gemini solves, waits timer, passes bookwork)
               → live progress DMs with PNG bars
+import os, subprocess, sys
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/render/.cache/ms-playwright")
+if not os.path.exists("/opt/render/.cache/ms-playwright"):
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
 
 Run:  python bot.py
 """
@@ -26,16 +30,6 @@ import os
 import subprocess
 import sys
 
-# Ensure Playwright browser is installed (idempotent, fast if already there)
-os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/render/.cache/ms-playwright")
-try:
-    subprocess.run(
-        [sys.executable, "-m", "playwright", "install", "chromium"],
-        check=True,
-        capture_output=True,
-    )
-except subprocess.CalledProcessError as e:
-    print("[startup] Playwright install failed:", e.stderr.decode())
 
 from voboai import sparx_login, homework as hw, automator
 
