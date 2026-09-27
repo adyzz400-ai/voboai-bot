@@ -3,7 +3,6 @@ import os
 from playwright.sync_api import sync_playwright
 
 
-# Keep Playwright browsers inside the project environment.
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
 SCHOOL_URL = (
@@ -12,39 +11,97 @@ SCHOOL_URL = (
 )
 
 
-def _get_school_input(page):
-    selectors = [
-        'input[placeholder="Start typing your school\'s name..."]',
-        'input[placeholder*="Start typing your school"]',
-        'input[aria-label*="Start typing your school"]',
-        'input[type="search"]',
-        'input[type="text"]',
-        '[role="textbox"]',
+def _find_school_input(page):
+    # Exact placeholder shown on the Sparx page.
+    exact = "Start typing your school's name..."
+
+    # Try the main page first.
+    locators = [
+        page.get_by_placeholder(exact, exact=True),
+        page.locator(f'input[placeholder="{exact}"]'),
+        page.locator("input").filter(
+            has=page.locator(
+                '[placeholder*="Start typing"]'
+            )
+        ),
     ]
 
+    for locator in locators:
+        try:
+            if locator.count() > 0:
+                item = locator.first
+                item.wait_for(
+                    state="visible",
+                    timeout=15000,
+                )
+                return item
+        except Exception:
+            pass
+
+    # Then check every iframe.
     for frame in page.frames:
-        for selector in selectors:
-            try:
-                locator = frame.locator(selector).first
+        if frame == page.main_frame:
+            continue
 
-                if locator.count() > 0:
-                    try:
-                        locator.wait_for(
-                            state="visible",
-                            timeout=8000,
-                        )
-                        return locator
-                    except Exception:
-                        pass
+        try:
+            locator = frame.get_by_placeholder(
+                exact,
+                exact=True,
+            )
 
-            except Exception:
-                pass
+            if locator.count() > 0:
+                item = locator.first
+                item.wait_for(
+                    state="visible",
+                    timeout=10000,
+                )
+                return item
+
+        except Exception:
+            pass
+
+        try:
+            locator = frame.locator(
+                'input[placeholder*="Start typing"]'
+            )
+
+            if locator.count() > 0:
+                item = locator.first
+                item.wait_for(
+                    state="visible",
+                    timeout=10000,
+                )
+                return item
+
+        except Exception:
+            pass
 
     return None
 
 
-def _get_button(page, name):
+def _find_button(page, name):
+    # Main page.
+    try:
+        button = page.get_by_role(
+            "button",
+            name=name,
+            exact=True,
+        ).first
+
+        if button.count() > 0:
+            button.wait_for(
+                state="visible",
+                timeout=10000,
+            )
+            return button
+    except Exception:
+        pass
+
+    # Frames.
     for frame in page.frames:
+        if frame == page.main_frame:
+            continue
+
         try:
             button = frame.get_by_role(
                 "button",
@@ -53,97 +110,96 @@ def _get_button(page, name):
             ).first
 
             if button.count() > 0:
-                try:
-                    button.wait_for(
-                        state="visible",
-                        timeout=8000,
-                    )
-                    return button
-                except Exception:
-                    pass
-
+                button.wait_for(
+                    state="visible",
+                    timeout=10000,
+                )
+                return button
         except Exception:
             pass
 
     return None
 
 
-def login(username, password, school_name, headless=True):
+def login(
+    username,
+    password,
+    school_name,
+    headless=True,
+):
     playwright = sync_playwright().start()
 
-    browser = playwright.chromium.launch(
-        headless=headless,
-        args=[
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-        ],
-    )
-
-    context = browser.new_context(
-        viewport={
-            "width": 1280,
-            "height": 900,
-        }
-    )
-
-    page = context.new_page()
+    browser = None
 
     try:
-        # Open Sparx school selection.
+        browser = playwright.chromium.launch(
+            headless=headless,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+            ],
+        )
+
+        context = browser.new_context(
+            viewport={
+                "width": 1280,
+                "height": 900,
+            },
+        )
+
+        page = context.new_page()
+
+        # Open Sparx.
         page.goto(
             SCHOOL_URL,
             wait_until="domcontentloaded",
             timeout=60000,
         )
 
-        try:
-            page.wait_for_load_state(
-                "networkidle",
-                timeout=30000,
-            )
-        except Exception:
-            # Some pages keep network requests open.
-            pass
+        # Give the page's JavaScript time to render.
+        page.wait_for_timeout(3000)
 
-        # Find school search box.
-        school_input = _get_school_input(page)
+        # Find school input.
+        school_input = _find_school_input(page)
 
         if school_input is None:
             raise RuntimeError(
-                "Could not find the Sparx school search box."
+                "Sparx school input was not visible to Playwright."
             )
 
-        # Enter school.
+        # Enter school name.
+        school_input.click()
         school_input.fill(school_name)
 
-        page.wait_for_timeout(1500)
+        page.wait_for_timeout(2000)
 
-        # Find matching school.
+        # Try to select the matching school.
         school_result = None
 
-        result_selectors = [
+        result_patterns = [
             f'[role="option"]:has-text("{school_name}")',
             f'li:has-text("{school_name}")',
             f'button:has-text("{school_name}")',
+            f'div:has-text("{school_name}")',
         ]
 
         for frame in page.frames:
-            for selector in result_selectors:
+            for selector in result_patterns:
                 try:
-                    result = frame.locator(selector).first
+                    results = frame.locator(selector)
 
-                    if result.count() > 0:
-                        try:
-                            result.wait_for(
-                                state="visible",
-                                timeout=5000,
-                            )
+                    count = results.count()
 
+                    for i in range(min(count, 10)):
+                        result = results.nth(i)
+
+                        if result.is_visible():
                             school_result = result
                             break
 
-                        except Exception:
-                            pass
+                    if school_result:
+                        break
 
                 except Exception:
                     pass
@@ -153,23 +209,24 @@ def login(username, password, school_name, headless=True):
 
         if school_result:
             school_result.click()
+            page.wait_for_timeout(500)
 
-        # Continue to login.
-        continue_button = _get_button(
+        # Continue.
+        continue_button = _find_button(
             page,
             "Continue",
         )
 
         if continue_button is None:
             raise RuntimeError(
-                "Could not find the Continue button."
+                "Could not find the Sparx Continue button."
             )
 
         continue_button.click()
 
-        page.wait_for_timeout(2500)
+        page.wait_for_timeout(3000)
 
-        # Find username and password fields.
+        # Find username/password.
         username_input = None
         password_input = None
 
@@ -181,25 +238,25 @@ def login(username, password, school_name, headless=True):
                     field = inputs.nth(i)
 
                     try:
-                        field.wait_for(
-                            state="visible",
-                            timeout=1500,
-                        )
+                        if not field.is_visible():
+                            continue
                     except Exception:
                         continue
 
-                    input_type = field.get_attribute(
-                        "type"
-                    )
+                    field_type = (
+                        field.get_attribute("type")
+                        or ""
+                    ).lower()
 
-                    if input_type == "password":
+                    if field_type == "password":
                         password_input = field
 
-                    elif (
-                        input_type in (None, "text")
-                        and username_input is None
+                    elif field_type in (
+                        "",
+                        "text",
                     ):
-                        username_input = field
+                        if username_input is None:
+                            username_input = field
 
             except Exception:
                 pass
@@ -214,24 +271,30 @@ def login(username, password, school_name, headless=True):
                 "Could not find the Sparx password field."
             )
 
-        # Enter credentials.
         username_input.fill(username)
         password_input.fill(password)
 
-        # Log in.
-        login_button = _get_button(
+        # Login.
+        login_button = _find_button(
             page,
             "Log in",
         )
 
         if login_button is None:
+            # Some Sparx pages use "Login".
+            login_button = _find_button(
+                page,
+                "Login",
+            )
+
+        if login_button is None:
             raise RuntimeError(
-                "Could not find the Log in button."
+                "Could not find the Sparx login button."
             )
 
         login_button.click()
 
-        page.wait_for_timeout(3000)
+        page.wait_for_timeout(4000)
 
         return {
             "success": True,
@@ -242,10 +305,11 @@ def login(username, password, school_name, headless=True):
         }
 
     except Exception as e:
-        try:
-            browser.close()
-        except Exception:
-            pass
+        if browser:
+            try:
+                browser.close()
+            except Exception:
+                pass
 
         try:
             playwright.stop()
