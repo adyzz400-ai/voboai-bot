@@ -1,10 +1,23 @@
 """
-VoboAi — Sparx Maths login automation.
+VoboAi — Sparx Maths login diagnostic.
+
+TEMPORARY diagnostic version.
+This does NOT perform the actual login or homework automation.
+
+It opens the Sparx school-selection page and reports:
+- Page title and URL
+- Visible page text
+- All inputs/textareas
+- All buttons
+- Relevant attributes/classes
+- Iframes/frames and their interactive elements
+- Whether the expected school-search element exists
 """
 
 import os
 import time
 
+# Keep Playwright browsers inside the deployed project environment.
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
 from playwright.sync_api import sync_playwright
@@ -16,18 +29,267 @@ SELECT_URL = (
 )
 
 
+def describe_elements(page):
+    """Print useful information about interactive elements."""
+
+    print("\n" + "=" * 70)
+    print("MAIN PAGE DIAGNOSTIC")
+    print("=" * 70)
+
+    print(f"URL: {page.url}")
+    print(f"TITLE: {page.title()}")
+
+    # Page text
+    try:
+        body_text = page.locator("body").inner_text(timeout=10000)
+        print("\n--- VISIBLE PAGE TEXT ---")
+        print(body_text[:5000])
+    except Exception as e:
+        print(f"\nCould not read page text: {e}")
+
+    # Inputs / textareas / contenteditable
+    print("\n--- INPUT ELEMENTS ---")
+
+    try:
+        inputs = page.locator(
+            "input, textarea, [contenteditable='true']"
+        ).evaluate_all(
+            """
+            elements => elements.map((el, index) => ({
+                index: index,
+                tag: el.tagName,
+                type: el.getAttribute("type"),
+                id: el.id,
+                name: el.getAttribute("name"),
+                class: el.className,
+                placeholder: el.getAttribute("placeholder"),
+                ariaLabel: el.getAttribute("aria-label"),
+                role: el.getAttribute("role"),
+                value: el.value || "",
+                outerHTML: el.outerHTML.slice(0, 1000)
+            }))
+            """
+        )
+
+        if not inputs:
+            print("NO INPUTS FOUND")
+
+        for item in inputs:
+            print("\nINPUT:")
+            print(f"  index:       {item['index']}")
+            print(f"  tag:         {item['tag']}")
+            print(f"  type:        {item['type']}")
+            print(f"  id:          {item['id']}")
+            print(f"  name:        {item['name']}")
+            print(f"  class:       {item['class']}")
+            print(f"  placeholder: {item['placeholder']}")
+            print(f"  aria-label:  {item['ariaLabel']}")
+            print(f"  role:        {item['role']}")
+            print(f"  value:       {item['value']}")
+            print(f"  HTML:        {item['outerHTML']}")
+
+    except Exception as e:
+        print(f"INPUT DIAGNOSTIC ERROR: {e}")
+
+    # Buttons
+    print("\n--- BUTTON ELEMENTS ---")
+
+    try:
+        buttons = page.locator(
+            "button, input[type='button'], input[type='submit']"
+        ).evaluate_all(
+            """
+            elements => elements.map((el, index) => ({
+                index: index,
+                tag: el.tagName,
+                type: el.getAttribute("type"),
+                id: el.id,
+                name: el.getAttribute("name"),
+                class: el.className,
+                text: el.innerText || el.value || "",
+                ariaLabel: el.getAttribute("aria-label"),
+                outerHTML: el.outerHTML.slice(0, 1000)
+            }))
+            """
+        )
+
+        if not buttons:
+            print("NO BUTTONS FOUND")
+
+        for item in buttons:
+            print("\nBUTTON:")
+            print(f"  index:      {item['index']}")
+            print(f"  tag:        {item['tag']}")
+            print(f"  type:       {item['type']}")
+            print(f"  id:         {item['id']}")
+            print(f"  name:       {item['name']}")
+            print(f"  class:      {item['class']}")
+            print(f"  text:       {item['text']}")
+            print(f"  aria-label: {item['ariaLabel']}")
+            print(f"  HTML:       {item['outerHTML']}")
+
+    except Exception as e:
+        print(f"BUTTON DIAGNOSTIC ERROR: {e}")
+
+    # Iframes
+    print("\n--- IFRAMES ---")
+
+    try:
+        iframe_count = page.locator("iframe").count()
+        print(f"IFRAME COUNT: {iframe_count}")
+
+        for i in range(iframe_count):
+            iframe = page.locator("iframe").nth(i)
+
+            print(f"\nIFRAME #{i}")
+            print(f"  src:   {iframe.get_attribute('src')}")
+            print(f"  id:    {iframe.get_attribute('id')}")
+            print(f"  name:  {iframe.get_attribute('name')}")
+            print(f"  class: {iframe.get_attribute('class')}")
+
+    except Exception as e:
+        print(f"IFRAME DIAGNOSTIC ERROR: {e}")
+
+    # Expected selector checks
+    print("\n--- EXPECTED SELECTOR CHECKS ---")
+
+    selectors = [
+        "input",
+        "textarea",
+        "[role='textbox']",
+        "[contenteditable='true']",
+        "input[type='search']",
+        "input[type='text']",
+        "[placeholder*='school' i]",
+        "[placeholder*='search' i]",
+        "[aria-label*='school' i]",
+        "[aria-label*='search' i]",
+        "._Input_1573n_4",
+        ".sm-input",
+    ]
+
+    for selector in selectors:
+        try:
+            count = page.locator(selector).count()
+            print(f"{selector}: {count}")
+        except Exception as e:
+            print(f"{selector}: ERROR - {e}")
+
+
+def describe_frames(page):
+    """Inspect every Playwright frame for inputs and buttons."""
+
+    print("\n" + "=" * 70)
+    print("FRAME DIAGNOSTIC")
+    print("=" * 70)
+
+    frames = page.frames
+
+    print(f"TOTAL FRAMES: {len(frames)}")
+
+    for index, frame in enumerate(frames):
+        print("\n" + "-" * 60)
+        print(f"FRAME #{index}")
+        print(f"URL: {frame.url}")
+
+        try:
+            inputs = frame.locator(
+                "input, textarea, [contenteditable='true']"
+            ).evaluate_all(
+                """
+                elements => elements.map((el, index) => ({
+                    index: index,
+                    tag: el.tagName,
+                    type: el.getAttribute("type"),
+                    id: el.id,
+                    name: el.getAttribute("name"),
+                    class: el.className,
+                    placeholder: el.getAttribute("placeholder"),
+                    ariaLabel: el.getAttribute("aria-label"),
+                    role: el.getAttribute("role"),
+                    outerHTML: el.outerHTML.slice(0, 1000)
+                }))
+                """
+            )
+
+            print(f"INPUTS IN FRAME: {len(inputs)}")
+
+            for item in inputs:
+                print(
+                    "  INPUT "
+                    f"#{item['index']} | "
+                    f"tag={item['tag']} | "
+                    f"type={item['type']} | "
+                    f"id={item['id']} | "
+                    f"class={item['class']} | "
+                    f"placeholder={item['placeholder']} | "
+                    f"aria-label={item['ariaLabel']}"
+                )
+
+        except Exception as e:
+            print(f"Could not inspect inputs: {e}")
+
+        try:
+            buttons = frame.locator(
+                "button, input[type='button'], input[type='submit']"
+            ).evaluate_all(
+                """
+                elements => elements.map((el, index) => ({
+                    index: index,
+                    tag: el.tagName,
+                    type: el.getAttribute("type"),
+                    id: el.id,
+                    class: el.className,
+                    text: el.innerText || el.value || "",
+                    ariaLabel: el.getAttribute("aria-label")
+                }))
+                """
+            )
+
+            print(f"BUTTONS IN FRAME: {len(buttons)}")
+
+            for item in buttons:
+                print(
+                    "  BUTTON "
+                    f"#{item['index']} | "
+                    f"tag={item['tag']} | "
+                    f"type={item['type']} | "
+                    f"id={item['id']} | "
+                    f"class={item['class']} | "
+                    f"text={item['text']} | "
+                    f"aria-label={item['ariaLabel']}"
+                )
+
+        except Exception as e:
+            print(f"Could not inspect buttons: {e}")
+
+
 def login(
     username: str,
     password: str,
     school_name: str,
     headless: bool = True,
 ):
+    """
+    Diagnostic-only login function.
+
+    The username/password/school arguments are intentionally not used yet.
+    We first need to see exactly what Render receives from Sparx.
+    """
+
+    del username
+    del password
+    del school_name
+
     playwright = sync_playwright().start()
     browser = None
-    step = "Starting Playwright"
 
     try:
-        step = "Launching Chromium"
+        print("\n" + "=" * 70)
+        print("SPARX PLAYWRIGHT DIAGNOSTIC STARTING")
+        print("=" * 70)
+
+        print("\nLaunching Chromium...")
 
         browser = playwright.chromium.launch(
             headless=headless,
@@ -40,13 +302,7 @@ def login(
         context = browser.new_context()
         page = context.new_page()
 
-        # ---------------------------------------------------------
-        # STEP 1 — Open school selection
-        # ---------------------------------------------------------
-
-        step = "Opening Sparx school selection page"
-
-        print(f"[login] Opening school select: {SELECT_URL}")
+        print(f"\nOpening:\n{SELECT_URL}")
 
         page.goto(
             SELECT_URL,
@@ -54,252 +310,89 @@ def login(
             timeout=60000,
         )
 
-        print(f"[login] Page loaded: {page.url}")
+        print("\nInitial page loaded.")
+        print(f"URL: {page.url}")
+        print(f"TITLE: {page.title()}")
 
-        # ---------------------------------------------------------
-        # STEP 2 — Find school search
-        # ---------------------------------------------------------
+        # Give Sparx's normal client-side page code a little time
+        # to finish rendering before inspecting the DOM.
+        print("\nWaiting 5 seconds for page rendering...")
+        time.sleep(5)
 
-        step = "Waiting for school search box"
+        describe_elements(page)
+        describe_frames(page)
 
-        search = page.get_by_role(
-            "textbox",
-            name="Start typing your school's name",
-        )
+        # Specific checks for the school input.
+        print("\n" + "=" * 70)
+        print("SCHOOL INPUT CHECK")
+        print("=" * 70)
 
-        search.wait_for(
-            state="visible",
-            timeout=30000,
-        )
+        checks = [
+            (
+                "get_by_role textbox",
+                lambda: page.get_by_role(
+                    "textbox",
+                    name="Start typing your school's name",
+                ).count(),
+            ),
+            (
+                "get_by_placeholder",
+                lambda: page.get_by_placeholder(
+                    "Start typing your school's name"
+                ).count(),
+            ),
+            (
+                "placeholder partial",
+                lambda: page.locator(
+                    "[placeholder*=\"Start typing\"]"
+                ).count(),
+            ),
+            (
+                "hashed Sparx input class",
+                lambda: page.locator(
+                    "._Input_1573n_4"
+                ).count(),
+            ),
+        ]
+
+        for name, check in checks:
+            try:
+                print(f"{name}: {check()}")
+            except Exception as e:
+                print(f"{name}: ERROR - {e}")
+
+        print("\n" + "=" * 70)
+        print("DIAGNOSTIC COMPLETE")
+        print("=" * 70)
 
         print(
-            "[login] Found Sparx school search box"
+            "\nIMPORTANT: No login was attempted."
+            "\nNo username or password was entered."
+            "\nNo homework automation was started."
         )
 
-        # ---------------------------------------------------------
-        # STEP 3 — Enter school name
-        # ---------------------------------------------------------
-
-        step = "Entering school name"
-
-        search.click()
-        search.fill(school_name)
-
-        print(
-            f"[login] Typed school: {school_name}"
-        )
-
+        # Keep the browser alive briefly so Render has time to finish
+        # writing the diagnostic output to its logs.
         time.sleep(2)
 
-        # ---------------------------------------------------------
-        # STEP 4 — Select school
-        # ---------------------------------------------------------
-
-        step = "Selecting school"
-
-        try:
-            page.get_by_text(
-                school_name,
-                exact=True,
-            ).first.click()
-
-            print(
-                "[login] Clicked school result"
-            )
-
-        except Exception:
-            page.locator(
-                "li, "
-                "[role='option'], "
-                "button"
-            ).filter(
-                has_text=school_name
-            ).first.click()
-
-            print(
-                "[login] Clicked school result (fallback)"
-            )
-
-        # ---------------------------------------------------------
-        # STEP 5 — Continue
-        # ---------------------------------------------------------
-
-        step = "Clicking Continue"
-
-        page.get_by_role(
-            "button",
-            name="Continue",
-        ).click()
-
-        print(
-            "[login] Clicked Continue"
-        )
-
-        step = "Waiting for Sparx login page"
-
-        try:
-            page.wait_for_url(
-                "**/oauth2/auth**",
-                timeout=30000,
-            )
-        except Exception:
-            time.sleep(3)
-
-        print(
-            f"[login] Current URL: {page.url}"
-        )
-
-        # ---------------------------------------------------------
-        # STEP 6 — Username
-        # ---------------------------------------------------------
-
-        step = "Waiting for username field"
-
-        username_field = page.locator(
-            "#username"
-        )
-
-        username_field.wait_for(
-            state="visible",
-            timeout=30000,
-        )
-
-        step = "Entering username"
-
-        username_field.fill(username)
-
-        print(
-            "[login] Filled username from Discord modal"
-        )
-
-        # ---------------------------------------------------------
-        # STEP 7 — Password
-        # ---------------------------------------------------------
-
-        step = "Waiting for password field"
-
-        password_field = page.locator(
-            "#password"
-        )
-
-        password_field.wait_for(
-            state="visible",
-            timeout=30000,
-        )
-
-        step = "Entering password"
-
-        password_field.fill(password)
-
-        print(
-            "[login] Filled password from Discord modal"
-        )
-
-        # ---------------------------------------------------------
-        # STEP 8 — Log in
-        # ---------------------------------------------------------
-
-        step = "Clicking Log in"
-
-        page.get_by_role(
-            "button",
-            name="Log in",
-        ).click()
-
-        print(
-            "[login] Clicked Log in"
-        )
-
-        step = "Waiting for login to complete"
-
-        try:
-            page.wait_for_load_state(
-                "domcontentloaded",
-                timeout=30000,
-            )
-        except Exception:
-            pass
-
-        time.sleep(3)
-
-        final_url = page.url
-
-        print(
-            f"[login] Final URL: {final_url}"
-        )
-
-        # ---------------------------------------------------------
-        # STEP 9 — Verify session
-        # ---------------------------------------------------------
-
-        step = "Verifying Sparx session"
-
-        cookies = context.cookies()
-
-        cookie_names = {
-            cookie["name"]
-            for cookie in cookies
-        }
-
-        has_session = (
-            "spxlrn_session" in cookie_names
-            or "live_ssoprovider_session" in cookie_names
-        )
-
-        print(
-            "[login] Session cookies:",
-            ", ".join(sorted(cookie_names)),
-        )
-
-        left_auth = (
-            "auth.sparx-learning.com"
-            not in final_url
-        )
-
-        success = (
-            left_auth
-            or has_session
-        )
-
-        if not success:
-            browser.close()
-            playwright.stop()
-
-            return {
-                "success": False,
-                "page": None,
-                "browser": None,
-                "context": None,
-                "playwright": None,
-                "url": final_url,
-                "error": "Login could not be verified.",
-            }
-
-        print(
-            "[login] Login successful."
-        )
+        browser.close()
+        playwright.stop()
 
         return {
-            "success": True,
-            "page": page,
-            "browser": browser,
-            "context": context,
-            "playwright": playwright,
-            "url": final_url,
+            "success": False,
+            "diagnostic": True,
+            "page": None,
+            "browser": None,
+            "context": None,
+            "playwright": None,
+            "url": SELECT_URL,
         }
 
     except Exception as e:
-
-        error_message = (
-            f"Step: {step}\n"
-            f"URL: "
-            f"{page.url if browser and 'page' in locals() else 'Unavailable'}\n"
-            f"Error: {str(e)}"
-        )
-
-        print(
-            f"[login] ERROR\n{error_message}"
-        )
+        print("\n" + "=" * 70)
+        print("DIAGNOSTIC ERROR")
+        print("=" * 70)
+        print(str(e))
 
         try:
             if browser:
@@ -312,56 +405,32 @@ def login(
         except Exception:
             pass
 
-        raise RuntimeError(
-            error_message
-        ) from e
+        raise
 
 
 def close_login(result):
-    """
-    Close the browser returned by login().
-    """
+    """Compatibility function for the existing bot."""
 
     try:
-        result["browser"].close()
+        if result.get("browser"):
+            result["browser"].close()
     except Exception:
         pass
 
     try:
-        result["playwright"].stop()
+        if result.get("playwright"):
+            result["playwright"].stop()
     except Exception:
         pass
 
 
 if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) < 4:
-        print(
-            "Usage: python -m voboai.sparx_login "
-            "<username> <password> <school>"
-        )
-        sys.exit(1)
-
     result = login(
-        sys.argv[1],
-        sys.argv[2],
-        sys.argv[3],
-        headless=False,
+        username="",
+        password="",
+        school_name="",
+        headless=True,
     )
 
-    if result["success"]:
-        print(
-            f"LOGIN OK -> {result['url']}"
-        )
-
-        input(
-            "Press Enter to close the browser..."
-        )
-
-        close_login(result)
-
-    else:
-        print(
-            f"LOGIN FAILED -> {result.get('url')}"
-        )
+    print("\nDiagnostic finished.")
+    print(f"URL checked: {result['url']}")
