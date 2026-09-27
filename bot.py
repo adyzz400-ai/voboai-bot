@@ -9,7 +9,7 @@ Flow:
               → live progress DMs with PNG bars
 import os, subprocess, sys
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/render/.cache/ms-playwright")
-if not os.path.exists("/opt/render/.cache/ms-playwright"):
+if not os.path.exists("/opt/render/.cache/ms-playwright/chromium-1091"):
     subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
 
 Run:  python bot.py
