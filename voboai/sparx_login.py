@@ -62,11 +62,7 @@ def login(
 
         step = "Waiting for school search box"
 
-        search = page.locator(
-            "input[type='search'], "
-            "input[type='text'], "
-            "[role='searchbox']"
-        ).first
+        search = page.locator("input").first
 
         search.wait_for(
             state="visible",
@@ -75,6 +71,7 @@ def login(
 
         step = "Entering school name"
 
+        search.click()
         search.fill(school_name)
 
         print(f"[login] Typed school: {school_name}")
