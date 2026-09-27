@@ -12,7 +12,7 @@ Run: python bot.py
 import os
 
 # Render installs Chromium during the build command.
-# Do not hard-code a Playwright Chromium revision or install browsers at runtime.
+# Force Playwright to use Render's browser directory.
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/render/.cache/ms-playwright"
 
 import time
