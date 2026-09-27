@@ -1,13 +1,16 @@
 import os
-import asyncio
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+
+from playwright.sync_api import sync_playwright
 
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
-SCHOOL_URL = "https://selectschool.sparx-learning.com/?app=sparx_maths&forget=1"
+SCHOOL_URL = (
+    "https://selectschool.sparx-learning.com/"
+    "?app=sparx_maths&forget=1"
+)
 
 
-async def _find_school_input(page):
+def _find_school_input(page):
     selectors = [
         'input[placeholder="Start typing your school\'s name..."]',
         'input[placeholder*="Start typing your school"]',
@@ -17,13 +20,12 @@ async def _find_school_input(page):
         '[role="textbox"]',
     ]
 
-    # Check every frame, including the main page.
     for frame in page.frames:
         for selector in selectors:
             try:
                 locator = frame.locator(selector).first
 
-                if await locator.count() > 0 and await locator.is_visible():
+                if locator.count() > 0 and locator.is_visible():
                     return locator
 
             except Exception:
@@ -32,10 +34,10 @@ async def _find_school_input(page):
     return None
 
 
-async def login(username, password, school_name, headless=True):
-    playwright = await async_playwright().start()
+def login(username, password, school_name, headless=True):
+    playwright = sync_playwright().start()
 
-    browser = await playwright.chromium.launch(
+    browser = playwright.chromium.launch(
         headless=headless,
         args=[
             "--no-sandbox",
@@ -43,16 +45,19 @@ async def login(username, password, school_name, headless=True):
         ],
     )
 
-    context = await browser.new_context(
-        viewport={"width": 1280, "height": 900},
+    context = browser.new_context(
+        viewport={
+            "width": 1280,
+            "height": 900,
+        }
     )
 
-    page = await context.new_page()
+    page = context.new_page()
 
     try:
         print("[Sparx] Opening school selection page...")
 
-        await page.goto(
+        page.goto(
             SCHOOL_URL,
             wait_until="domcontentloaded",
             timeout=60000,
@@ -60,17 +65,15 @@ async def login(username, password, school_name, headless=True):
 
         print(f"[Sparx] Page loaded: {page.url}")
 
-        # Give Sparx's frontend time to initialise.
-        await page.wait_for_timeout(2000)
+        page.wait_for_timeout(3000)
 
         print("[Sparx] Looking for school search box...")
 
-        school_input = await _find_school_input(page)
+        school_input = _find_school_input(page)
 
         if school_input is None:
-            # One extra wait in case the frontend renders late.
-            await page.wait_for_timeout(3000)
-            school_input = await _find_school_input(page)
+            page.wait_for_timeout(3000)
+            school_input = _find_school_input(page)
 
         if school_input is None:
             raise RuntimeError(
@@ -79,14 +82,18 @@ async def login(username, password, school_name, headless=True):
 
         print("[Sparx] School search box found.")
 
-        await school_input.click()
-        await school_input.fill(school_name)
+        school_input.click()
+        school_input.fill(school_name)
 
-        print(f"[Sparx] Searching for school: {school_name}")
+        print(
+            f"[Sparx] Searching for school: {school_name}"
+        )
 
-        await page.wait_for_timeout(2000)
+        page.wait_for_timeout(2000)
 
-        # Find the matching school result.
+        # Find the school result.
+        school_result = None
+
         result_selectors = [
             f'text="{school_name}"',
             f'[role="option"]:has-text("{school_name}")',
@@ -94,16 +101,18 @@ async def login(username, password, school_name, headless=True):
             f'button:has-text("{school_name}")',
         ]
 
-        school_result = None
-
         for frame in page.frames:
             for selector in result_selectors:
                 try:
                     locator = frame.locator(selector).first
 
-                    if await locator.count() > 0 and await locator.is_visible():
+                    if (
+                        locator.count() > 0
+                        and locator.is_visible()
+                    ):
                         school_result = locator
                         break
+
                 except Exception:
                     pass
 
@@ -111,12 +120,15 @@ async def login(username, password, school_name, headless=True):
                 break
 
         if school_result:
-            await school_result.click()
+            school_result.click()
             print("[Sparx] School selected.")
         else:
-            print("[Sparx] No exact school result found; checking Continue.")
+            print(
+                "[Sparx] Exact school result not found; "
+                "checking Continue."
+            )
 
-        # Continue button
+        # Continue button.
         continue_button = None
 
         for frame in page.frames:
@@ -127,39 +139,43 @@ async def login(username, password, school_name, headless=True):
                     exact=True,
                 ).first
 
-                if await button.count() > 0 and await button.is_visible():
+                if (
+                    button.count() > 0
+                    and button.is_visible()
+                ):
                     continue_button = button
                     break
+
             except Exception:
                 pass
 
         if continue_button is None:
-            raise RuntimeError("Could not find the Continue button.")
+            raise RuntimeError(
+                "Could not find the Continue button."
+            )
 
-        await continue_button.click()
+        continue_button.click()
 
         print("[Sparx] Continue clicked.")
 
-        await page.wait_for_timeout(2000)
+        page.wait_for_timeout(2000)
 
-        # Username
+        # Find username/password fields.
         username_input = None
         password_input = None
 
         for frame in page.frames:
             try:
                 inputs = frame.locator("input")
-
-                count = await inputs.count()
+                count = inputs.count()
 
                 for i in range(count):
                     inp = inputs.nth(i)
 
-                    if not await inp.is_visible():
+                    if not inp.is_visible():
                         continue
 
-                    input_type = await inp.get_attribute("type")
-                    placeholder = await inp.get_attribute("placeholder")
+                    input_type = inp.get_attribute("type")
 
                     if input_type == "password":
                         password_input = inp
@@ -174,18 +190,22 @@ async def login(username, password, school_name, headless=True):
                 pass
 
         if username_input is None:
-            raise RuntimeError("Could not find the Sparx username field.")
+            raise RuntimeError(
+                "Could not find the Sparx username field."
+            )
 
         if password_input is None:
-            raise RuntimeError("Could not find the Sparx password field.")
+            raise RuntimeError(
+                "Could not find the Sparx password field."
+            )
 
-        await username_input.fill(username)
+        username_input.fill(username)
         print("[Sparx] Username entered.")
 
-        await password_input.fill(password)
+        password_input.fill(password)
         print("[Sparx] Password entered.")
 
-        # Login button
+        # Log in button.
         login_button = None
 
         for frame in page.frames:
@@ -196,20 +216,26 @@ async def login(username, password, school_name, headless=True):
                     exact=True,
                 ).first
 
-                if await button.count() > 0 and await button.is_visible():
+                if (
+                    button.count() > 0
+                    and button.is_visible()
+                ):
                     login_button = button
                     break
+
             except Exception:
                 pass
 
         if login_button is None:
-            raise RuntimeError("Could not find the Log in button.")
+            raise RuntimeError(
+                "Could not find the Log in button."
+            )
 
-        await login_button.click()
+        login_button.click()
 
         print("[Sparx] Log in clicked.")
 
-        await page.wait_for_timeout(3000)
+        page.wait_for_timeout(3000)
 
         print(f"[Sparx] Final URL: {page.url}")
 
@@ -224,8 +250,15 @@ async def login(username, password, school_name, headless=True):
     except Exception as e:
         print(f"[Sparx] ERROR: {e}")
 
-        await browser.close()
-        await playwright.stop()
+        try:
+            browser.close()
+        except Exception:
+            pass
+
+        try:
+            playwright.stop()
+        except Exception:
+            pass
 
         return {
             "success": False,
