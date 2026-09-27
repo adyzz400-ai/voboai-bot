@@ -13,10 +13,7 @@ import os
 
 # Render installs Chromium during the build command.
 # Do not hard-code a Playwright Chromium revision or install browsers at runtime.
-os.environ.setdefault(
-    "PLAYWRIGHT_BROWSERS_PATH",
-    "/opt/render/.cache/ms-playwright",
-)
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/render/.cache/ms-playwright"
 
 import time
 import threading
