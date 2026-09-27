@@ -5,9 +5,14 @@ import subprocess
 from playwright.sync_api import sync_playwright
 
 
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
-
-GO_WORKER = "./sparx-server"
+WORKER = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "sparx",
+        "worker.js",
+    )
+)
 
 
 def login(
@@ -27,26 +32,37 @@ def login(
         }
 
         result = subprocess.run(
-            [GO_WORKER],
+            [
+                "node",
+                WORKER,
+            ],
             input=json.dumps(request),
             text=True,
             capture_output=True,
             timeout=120,
         )
 
-        if result.returncode != 0:
+        output = result.stdout.strip()
+
+        if not output:
             return {
                 "success": False,
                 "error": (
                     result.stderr.strip()
-                    or result.stdout.strip()
-                    or "Sparx worker failed."
+                    or "Sparx worker returned no output."
                 ),
             }
 
-        data = json.loads(
-            result.stdout.strip()
-        )
+        try:
+            data = json.loads(output)
+        except json.JSONDecodeError:
+            return {
+                "success": False,
+                "error": (
+                    "Sparx worker returned invalid JSON: "
+                    + output[:500]
+                ),
+            }
 
         if not data.get("success"):
             return {
@@ -57,17 +73,12 @@ def login(
                 ),
             }
 
-        storage_state = data.get(
-            "storage_state"
-        )
+        storage_state = data.get("storage_state")
 
         if not storage_state:
             return {
                 "success": False,
-                "error": (
-                    "Sparx login returned "
-                    "no session."
-                ),
+                "error": "Sparx login returned no session.",
             }
 
         playwright = sync_playwright().start()
@@ -105,15 +116,6 @@ def login(
             "error": (
                 "Sparx login timed out "
                 "after 120 seconds."
-            ),
-        }
-
-    except json.JSONDecodeError:
-        return {
-            "success": False,
-            "error": (
-                "The Sparx worker returned "
-                "invalid JSON."
             ),
         }
 
