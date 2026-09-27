@@ -14,58 +14,195 @@ Real flow (from user's actual page elements):
        - Fill #password
        - Click "Log in"
 """
+
+import os
+import sys
+import subprocess
 import time
+
+# Use the same Playwright browser location as Render.
+os.environ.setdefault(
+    "PLAYWRIGHT_BROWSERS_PATH",
+    "/opt/render/.cache/ms-playwright",
+)
 
 from playwright.sync_api import sync_playwright
 
-SELECT_URL = "https://selectschool.sparx-learning.com/?app=sparx_maths&forget=1"
+
+SELECT_URL = (
+    "https://selectschool.sparx-learning.com/"
+    "?app=sparx_maths&forget=1"
+)
 
 
-def login(username: str, password: str, school_name: str, headless: bool = True):
+def ensure_playwright_browser():
+    """
+    Make sure Playwright's Chromium browser is installed.
+
+    Render normally installs Chromium during the build step.
+    If it is missing, install the browser automatically instead
+    of crashing with "Executable doesn't exist".
+    """
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
+        executable = p.chromium.executable_path
+
+    if os.path.exists(executable):
+        return
+
+    print(
+        "[login] Playwright Chromium not found."
+        " Installing Chromium..."
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "playwright",
+            "install",
+            "chromium",
+        ],
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Playwright Chromium installation failed."
+        )
+
+    if not os.path.exists(executable):
+        raise RuntimeError(
+            f"Playwright Chromium is still missing at: "
+            f"{executable}"
+        )
+
+    print("[login] Playwright Chromium is ready.")
+
+
+def login(
+    username: str,
+    password: str,
+    school_name: str,
+    headless: bool = True,
+):
+    ensure_playwright_browser()
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=headless
+        )
+
         context = browser.new_context()
         page = context.new_page()
 
         # ---- Step 1: School select ----
-        print(f"[login] Opening school select: {SELECT_URL}")
-        page.goto(SELECT_URL, wait_until="networkidle")
+        print(
+            f"[login] Opening school select: {SELECT_URL}"
+        )
 
-        search = page.locator("input[type='search'], input[type='text'], [role='searchbox']").first
+        page.goto(
+            SELECT_URL,
+            wait_until="networkidle",
+        )
+
+        search = page.locator(
+            "input[type='search'], "
+            "input[type='text'], "
+            "[role='searchbox']"
+        ).first
+
         search.fill(school_name)
-        print(f"[login] Typed school: {school_name}")
+
+        print(
+            f"[login] Typed school: {school_name}"
+        )
+
         time.sleep(2)
 
         try:
-            page.locator(f"text={school_name}").first.click()
-            print("[login] Clicked school result")
+            page.locator(
+                f"text={school_name}"
+            ).first.click()
+
+            print(
+                "[login] Clicked school result"
+            )
+
         except Exception:
-            page.locator("li, [role='option'], button").filter(has_text=school_name).first.click()
-            print("[login] Clicked school result (fallback)")
+            page.locator(
+                "li, [role='option'], button"
+            ).filter(
+                has_text=school_name
+            ).first.click()
 
-        page.get_by_role("button", name="Continue").click()
-        print("[login] Clicked Continue")
+            print(
+                "[login] Clicked school result "
+                "(fallback)"
+            )
 
-        page.wait_for_url("**/oauth2/auth**", timeout=30000)
-        print(f"[login] Redirected to: {page.url}")
+        page.get_by_role(
+            "button",
+            name="Continue",
+        ).click()
+
+        print(
+            "[login] Clicked Continue"
+        )
+
+        page.wait_for_url(
+            "**/oauth2/auth**",
+            timeout=30000,
+        )
+
+        print(
+            f"[login] Redirected to: {page.url}"
+        )
 
         # ---- Step 2: Fill login form ----
-        page.fill("#username", username)
-        print("[login] Filled username")
+        page.fill(
+            "#username",
+            username,
+        )
 
-        page.fill("#password", password)
-        print("[login] Filled password")
+        print(
+            "[login] Filled username"
+        )
 
-        page.get_by_role("button", name="Log in").click()
-        print("[login] Clicked Log in")
+        page.fill(
+            "#password",
+            password,
+        )
 
-        page.wait_for_load_state("networkidle")
+        print(
+            "[login] Filled password"
+        )
+
+        page.get_by_role(
+            "button",
+            name="Log in",
+        ).click()
+
+        print(
+            "[login] Clicked Log in"
+        )
+
+        page.wait_for_load_state(
+            "networkidle"
+        )
+
         time.sleep(3)
 
         final_url = page.url
-        print(f"[login] Final URL: {final_url}")
 
-        success = "auth.sparx-learning.com" not in final_url
+        print(
+            f"[login] Final URL: {final_url}"
+        )
+
+        success = (
+            "auth.sparx-learning.com"
+            not in final_url
+        )
 
         return {
             "success": success,
@@ -77,14 +214,27 @@ def login(username: str, password: str, school_name: str, headless: bool = True)
 
 
 if __name__ == "__main__":
-    import sys
-
     if len(sys.argv) < 4:
-        print("Usage: python -m voboai.sparx_login <username> <password> <school>")
+        print(
+            "Usage: python -m "
+            "voboai.sparx_login "
+            "<username> <password> <school>"
+        )
         sys.exit(1)
 
-    result = login(sys.argv[1], sys.argv[2], sys.argv[3], headless=False)
+    result = login(
+        sys.argv[1],
+        sys.argv[2],
+        sys.argv[3],
+        headless=False,
+    )
+
     if result["success"]:
-        print(f"LOGIN OK -> {result['url']}")
+        print(
+            f"LOGIN OK -> {result['url']}"
+        )
     else:
-        print(f"LOGIN FAILED -> {result.get('url')}")
+        print(
+            f"LOGIN FAILED -> "
+            f"{result.get('url')}"
+        )
